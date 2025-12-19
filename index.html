@@ -1,0 +1,435 @@
+<!DOCTYPE html><html lang="zh-CN"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title>环人广音乐剧地图·完整版</title> <style> /* === 1. 全局基础样式 === */ :root { --bg-color: #dcbba3; --line-color: #5c3022; --highlight-color: #b83b18; --text-color: #3e2015; --modal-bg: #f4eadd; --label-offset: 50%; --label-padding: 80px; } body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: "Songti SC", "SimSun", serif; overflow: hidden; background-color: var(--bg-color); color: var(--text-color); user-select: none; }
+/* 通用返回按钮 */
+.back-btn { position: absolute; top: 30px; left: 30px; z-index: 100; background: transparent; border: 2px solid var(--line-color); color: var(--line-color); padding: 8px 20px; font-weight: bold; font-family: inherit; cursor: pointer; transition: all 0.3s; }
+.back-btn:hover { background: var(--line-color); color: #fff; }
+
+/* === 2. 首页地图视图 (#map-view) === */
+#map-view { width: 100%; height: 100%; background-image: url('ditu.png'); background-size: cover; background-position: center; position: absolute; top: 0; left: 0; transition: all 0.8s ease; z-index: 10; }
+
+/* 地图上的标记点 */
+.pin { position: absolute; width: 40px; height: 40px; background: rgba(255, 255, 255, 0.2); border: 2px solid #fff; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; animation: pulse 2s infinite; }
+.pin:hover { transform: scale(1.1); background: rgba(255, 255, 255, 0.4); }
+.pin::after { content: ''; width: 10px; height: 10px; background: #fff; border-radius: 50%; }
+.pin-label { position: absolute; top: -40px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-weight: 900; font-size: 24px; color: #ffffff; text-shadow: 0 2px 4px rgba(0,0,0,0.8); pointer-events: none; }
+
+/* 标记位置 */
+#pin-no1 { top: 15%; left: 40%; }   /* 第一百货 */
+#pin-asia { top: 25%; left: 50%; }  /* 亚洲大厦 */
+#pin-world { top: 70%; left: 60%; } /* 大世界 */
+
+/* === 3. 视图容器管理 === */
+.sub-view { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at center, #eadfd5 0%, #dcbba3 100%); transform: translateY(100%); transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1); overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.sub-view.active { transform: translateY(0); z-index: 20; }
+
+/* === 4. 视觉展示页 (Visual Mode) === */
+#visual-view { --building-height: 72vh; }
+
+/* 针对不同楼栋的微调配置 */
+#visual-view[data-building="no1"] { --label-offset: 49%; --label-padding: 55px; --building-height: 90vh; }
+#visual-view[data-building="asia"] { --label-offset: 47%; --label-padding: 120px; --building-height: 90vh; }
+/* 新增：大世界样式 */
+#visual-view[data-building="world"] { --label-offset: 48.5%; --label-padding: 80px; --building-height: 96vh; }
+
+#visual-content { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: flex-start; gap: 6vw; padding: 40px 6vw; box-sizing: border-box; }
+
+.building-img { max-height: var(--building-height); width: auto; opacity: 0.95; filter: sepia(0.3) contrast(1.1); z-index: 1; margin-top: 10px; flex-shrink: 0; }
+
+/* 楼层大字背景 */
+.bg-floor-mark { position: absolute; left: 50%; transform: translateX(-50%); font-size: 100px; font-weight: 900; color: rgba(255,255,255,0.5); z-index: 0; pointer-events: none; mix-blend-mode: soft-light; }
+
+.annotation-layer { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(65vw, 1100px); height: var(--building-height); z-index: 10; pointer-events: none; margin-top: 10px;}
+/* 第一百货：略收注记层，突出楼体 */
+.annotation-layer[data-building="no1"] { width: min(60vw, 950px); }
+/* 大世界：控制注记宽度，让楼更大 */
+.annotation-layer[data-building="world"] { width: min(56vw, 950px); }
+#visual-view[data-building="world"] #visual-content { gap: 4vw; padding: 40px 4vw; }
+.show-item {
+position: absolute;
+pointer-events: auto;
+display: flex;
+align-items: center;
+cursor: pointer;
+transition: all 0.3s ease;
+height: 30px;
+z-index: 10;
+gap: 10px;
+--line-length: 110px;
+--extra-shift: 0px;
+}
+.show-item:hover { z-index: 100; transform: translateY(-3px); }
+.line {
+height: 1px;
+background: var(--line-color);
+width: var(--line-length);
+position: relative;
+transition: width 0.3s, background 0.3s;
+}
+.line::after {
+content: '';
+position: absolute;
+width: 5px; height: 5px;
+background: var(--line-color);
+border-radius: 50%;
+}
+.show-item:hover .line { width: calc(var(--line-length) + 15px); }
+.show-name {
+font-size: 13px;
+font-weight: bold;
+padding: 4px 8px;
+background: rgba(255,255,255,0.95);
+border: 1px solid var(--line-color);
+border-radius: 2px;
+white-space: nowrap;
+box-shadow: 2px 2px 0 rgba(92, 48, 34, 0.1);
+transition: all 0.3s;
+position: relative; /* 确保 show-name 是 company-name-label 的定位参照基准 */
+z-index: 2; /* 确保剧目名称在最上层 */
+}
+.show-item:hover .show-name { transform: scale(1.05); box-shadow: 4px 4px 6px rgba(92,48,34,0.15); }
+.show-item.left { right: calc(var(--label-offset) + var(--label-padding) + var(--extra-shift)); flex-direction: row; padding-right: 5px; }
+.show-item.left .show-name { margin-right: 8px; }
+.show-item.left .line::after { right: -2.5px; top: -2px; }
+.show-item.right { left: calc(var(--label-offset) + var(--label-padding) + var(--extra-shift)); flex-direction: row-reverse; padding-left: 5px; }
+.show-item.right .show-name { margin-left: 8px; }
+.show-item.right .line::after { left: -2.5px; top: -2px; }
+
+/* --- 悬停展开和公司名称显示样式 --- */
+
+/* 悬停时显示的公司名称（小字） - **位于白框正下方居中** */
+.show-name .company-name-label {
+    position: absolute;
+    bottom: -20px; /* 剧目方框下方留空 */
+    left: 50%;
+    transform: translateX(-50%); /* 自身居中 */
+    font-size: 10px; 
+    color: var(--highlight-color);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 10; /* 确保在最上层 */
+}
+
+/* 展开剧目的容器 */
+.show-item .expanded-shows {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    gap: 5px; /* 展开剧目框之间的间距 */
+    opacity: 0;
+    pointer-events: none; /* 默认不接受事件 */
+    transition: opacity 0.3s ease;
+    min-width: 80px;
+    z-index: 9;
+}
+
+/* 展开的剧目小盒子样式 */
+.expanded-shows .show-box {
+    font-size: 10px;
+    padding: 2px 5px;
+    background: var(--modal-bg); /* 使用亮色背景 */
+    border: 1px solid var(--line-color);
+    border-radius: 2px;
+    white-space: nowrap;
+    cursor: default; /* 不可点击 */
+    box-shadow: 1px 1px 2px rgba(92, 48, 34, 0.1);
+}
+
+/* 悬停激活状态时显示公司名称和展开剧目 */
+.show-item.active .show-name .company-name-label,
+.show-item.active .expanded-shows {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* 靠左的剧目，展开到左侧 */
+.show-item.left .expanded-shows {
+    right: calc(100% + 15px); /* 位于主剧目框和引线左侧 */
+    top: 50%;
+    transform: translateY(-50%);
+    align-items: flex-end; /* 盒子右对齐 */
+}
+
+/* 靠右的剧目，展开到右侧 */
+.show-item.right .expanded-shows {
+    left: calc(100% + 15px);
+    top: 50%;
+    transform: translateY(-50%);
+    align-items: flex-start; /* 盒子左对齐 */
+}
+
+/* --- 悬停展开功能样式结束 --- */
+
+
+/* === 5. 弹窗 (Modal) === */
+#modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 200; display: none; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+#modal-overlay.show { display: flex; }
+.modal-card { background: var(--modal-bg); width: 500px; max-height: 85vh; padding: 30px; border: 4px double var(--line-color); box-shadow: 10px 10px 30px rgba(0,0,0,0.5); position: relative; text-align: center; display: flex; flex-direction: column; overflow-y: auto; }
+
+/* 海报图片样式 */
+.modal-poster { width: 100%; max-width: 200px; height: auto; margin: 0 auto 15px auto; border: 2px solid var(--line-color); box-shadow: 3px 3px 8px rgba(0,0,0,0.2); display: block; border-radius: 2px; }
+
+.modal-title { font-size: 26px; color: var(--line-color); margin-bottom: 5px; border-bottom: 1px solid rgba(92,48,34,0.3); padding-bottom: 10px; font-weight: bold; }
+.modal-company { font-size: 14px; color: #888; margin-bottom: 15px; font-style: italic; }
+.modal-desc { font-size: 15px; line-height: 1.8; text-align: left; text-indent: 2em; color: #4a3b32; }
+.modal-close { position: absolute; top: 10px; right: 15px; font-size: 28px; cursor: pointer; color: var(--line-color); transition: transform 0.2s; }
+.modal-close:hover { transform: rotate(90deg); color: var(--highlight-color); }
+
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.7); } 70% { box-shadow: 0 0 0 20px rgba(255,255,255,0); } 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); } }
+
+/* 微调楼栋标签间距 - 亚洲大厦的密集处 */
+#vis-layer[data-building="asia"] .show-item[data-floor="2F"] { transform: translateY(4px); }
+#vis-layer[data-building="asia"] .show-item[data-floor="2F"].spread-1 { transform: translateY(-6px); }
+#vis-layer[data-building="asia"] .show-item[data-floor="2F"].spread-2 { transform: translateY(6px); }
+#vis-layer[data-building="asia"] .show-item[data-floor="2F"].spread-3 { transform: translateY(24px); }
+</style> </head> <body><!-- 1. 首页地图层 --><div id="map-view"> <div class="pin" id="pin-no1" onclick="goVisualView('no1')"> <span class="pin-label">第一百货</span> </div> <div class="pin" id="pin-asia" onclick="goVisualView('asia')"> <span class="pin-label">亚洲大厦</span> </div> <!-- 修改：大世界现在也跳转到 visual view --> <div class="pin" id="pin-world" onclick="goVisualView('world')"> <span class="pin-label">大世界</span> </div> </div><!-- 2. 视觉展示页 (Visual View) --><div id="visual-view" class="sub-view"> <button class="back-btn" onclick="backToMap()">← 返回地图</button> <div id="visual-content"> <div id="floor-marks-container"></div> <img src="" class="building-img" id="current-building-img" alt="Building"> <div class="annotation-layer" id="vis-layer"></div> </div> </div><!-- 3. 详情弹窗 --><div id="modal-overlay" onclick="closeModal(event)"> <div class="modal-card"> <div class="modal-close" onclick="closeModal(event)">×</div> <img src="" id="m-img" class="modal-poster" alt="剧目海报" onerror="this.style.display='none'"> <h2 class="modal-title" id="m-title">剧目</h2> <div class="modal-company" id="m-company">信息</div> <div class="modal-desc" id="m-desc">简介...</div> </div> </div><script> // === 新增/修改：公司-剧目映射表 (用于悬停展开) ===
+const COMPANY_SHOW_MAP = {
+    "一台好戏": ["阿波罗尼亚", "桑塔露琪亚", "去你的夏天"],
+    "延幕文化": ["幽灵", "怪物", "奥尔菲斯"],
+    "好好有戏": ["#0528", "辛吉路的画材店", "六个说谎的大学生"],
+    "莫瑞吉": ["丽兹", "流星之绊", "致爱", "海雾"],
+    "睿鱼文化": ["“savior”", "狂炎奏鸣曲"],
+    "魅鲸文化": ["OZ", "翻国王棋", "梦微之", "灯塔"],
+    "缪时客": ["flames火焰", "小说", "嫌疑人x的献身", "长安十二时辰", "干花"],
+    "涵金文化": ["末日迷途", "嗜血博士"],
+    "耶比剧场": ["当你心动时"], // 只有一部，不展开
+    "熠璟文化": ["阿尔托，梵高"], // 只有一部，不展开
+    "山眠剧场": ["寅时说", "九尾古董店"],
+    "五十五文化": ["亡灵之旅：冥犬与少年"], // 只有一部，不展开
+    "果然有戏": ["王冠"], // 只有一部，不展开
+    "河鳄文化": ["连璧", "摇滚太白·诗与星"],
+    "一岁文化": ["死神疗愈馆"], // 只有一部，不展开
+    "临窗文艺": ["雕像"], // 只有一部，不展开
+    "适意为之studio": ["渡河，渡河"], // 只有一部，不展开 (假设“渡河，渡河”指代同一个剧目)
+    "刘添祺剧场": ["外人"], // 只有一部，不展开
+    "剧伙音乐": ["星图", "锦衣卫", "杨戬"]
+    // 单一剧目公司（如神庙剧场、弹珠汽水等）无需展开，保留原始公司名
+};
+
+// === 数据源 (已统一公司名称并调整 shiftX/lineWidth) ===
+// A. 第一百货数据 
+const no1Data = [
+    { name: "庆余年", floor: "11F丨星空间72号·神庙剧场", top: 28, side: "left", lineWidth: 130, shiftX: -35, company: "神庙剧场", image: "海报/庆余年.png", desc: "庆历七年，这是范慎穿越到庆国，成为范闲的第二十年。生父庆帝，生母叶轻眉。在江南期间，他清剿胶州水师，借明家案撼动嫡长铁律，引发朝野震荡。归京途中，范闲突遇伏击，九死一生。皇室，军方，鉴查院步步紧逼，真相迷雾重重..." },
+    { name: "“savior”", floor: "11F丨星空间·星空穹顶剧场", top: 28, side: "right", lineWidth: 150, shiftX: -8, company: "睿鱼文化", image: "海报/“savior”.png", desc: "1945年，二战结束。硝烟未散的荷兰，阿姆斯特丹的废墟之上。中尉皮勒奉命接管一家被查封的画廊，查出一桩令人震惊的交易画商范。米格伦以天价将一幅荷兰'国宝'卖给了纳粹戈林，教授马丁确认了范·米格伦的叛国铁证。叛国罪的绞索在渐渐收紧，对范·米格伦的审判举世瞩目。这是一场不止颠覆艺术史的审判，这幅画作还能否成为寄托信仰的'Savior'?当望向画作，人们到底看到了什么?是否有勇气面对揭开的往事?又将如何承受相的代价?" }, // 公司名已更新
+    { name: "末日迷途", floor: "10F丨星空间8808号·涵金小剧场", top: 33, side: "left", lineWidth: 110, company: "涵金文化", image: "海报/末日迷途.png", desc: "全球变暖，远古神秘病毒从永久冻土中意外释放，现代文明瞬间陷入黑暗的废墟。尸群肆虐，秩序崩塌，幸存者逐渐异化，被迫成为原始本能的奴隶。英国威尔斯特，逐渐丧失幸存意志的弗雷克顿家族继承人威廉意外接收到一条广播，一个绝对安全的避难所，成为了末日幸存者的曙光。然而人性的扭曲，现实的崩塌，以及对原有秩序的执念，都让这条通往新乌托邦的道路，布满荆棘。真相远比想象中更悲惨，而渴望的归宿，或许早已注定......" },
+    { name: "危情十日", floor: "10F丨星空间999号·弹珠汽水工场", top: 36, side: "right", lineWidth: 110, shiftX: 40, company: "弹珠汽水", image: "海报/危情十日.png", desc: "《危情十日》由美国剧作家威廉姆·高德曼根据史蒂芬。金恐怖小说《Misery》改编。保罗·谢尔顿是一位畅销小说作家，在一次暴风雪交通事故中，他被一名叫安妮·威尔克斯的独居女士救起，她自称是一名护士，也是保罗的头号粉丝。在与世隔绝的幽闭小屋中，安妮悉心照顾着身受重伤的保罗，直到她看到保罗的新书里面，作者把她最喜欢的角色米瑟莉写死了后，安妮变得疯狂和恐怖。安妮将保罗囚禁在一个房间，迫使他开始写一本新的《Misery》小说，她要他复活米瑟莉。保罗试图一切办法逃离这个房间，而当他终于有一天打开了这个房间的门，却似乎打开了一个恐怖魔盒......他看到了可怕的东西。一个永远不能让他带离这个地方的秘密......一处幽僻的小屋，两个孤独的灵魂，一本逐渐完成的新书，一段被深渊凝视的至暗时光。" }, // 新增 shiftX
+    { name: "低智商犯罪", floor: "10F丨星空间2333号·三江口剧场", top: 40, side: "left", lineWidth: 95, company: " ", image: "海报/低智商犯罪.png", desc: "城市的角落，两个愚蠢的盗贼为了江湖地位，要做一桩扬名立万的大案......名利场中，一群老谋深算的大人物各怀鬼胎，暗地设局，展开了不可告人的交锋.....公安局里，一个运气超好的警官临危受命，带队指挥，开始了秘密调查......一场啼笑皆非的误会让他们交织在了一起，在鱼龙混杂的地下社会里，展开了烧脑而又滑稽的争斗。阴差阳错，天降洪福，千算万算，百密一疏，且看'运气神探'如何捉住笨贼，搅乱那些见不得光的地下交易，还你一个清平世界。" },
+    { name: "外人", floor: "10F丨星空间332号·祺剧场", top: 44, side: "right", lineWidth: 100, shiftX: 110, company: "刘添祺剧场", image: "海报/外人.png", desc: "一场未知病原体爆发席卷城市，丧尸横行。中年父亲「甲」与女装博主「乙」在逃亡中意外被困卫生间。两人性格迥异甲谨慎保守，牵挂妻女；乙激进果敢，执意寻找前妻女儿。在密闭空间中，他们不仅要对抗客厅里'丧尸化'的母亲，更要直面原生家庭创伤，中年婚姻危机与自我认同困境。当感染风险降临，两人在生存与道义间做出震撼抉择。" }, // 新增 shiftX
+    { name: "当你心动时", floor: "7F丨星空间12号·耶比剧场", top: 60, side: "left", lineWidth: 120, company: "耶比剧场", image: "海报/当你心动时.png", desc: "情感咨询师叶白因被分手折磨得苦不堪言，向偶然出现的魔女“莉莉丝”交出了自己的心动能力，从而看破情场，得意沙场，成为众人追捧的“分手大师”。然而，被抽离的“恋爱之心”却具象化为一个叫“小白”的人形，跟随在叶白身边，引发了一系列奇幻搞笑的爱情故事。最终，叶白在与塔罗牌占卜师露露的相处中，重新审视爱情，学会了勇敢面对内心的真实情感。" },
+    { name: "王冠", floor: "7F丨星空间216·果然有戏小剧场", top: 64, side: "right", lineWidth: 125, shiftX: 65, company: "果然有戏", image: "海报/王冠.png", desc: "在大陆的边陲之地，雪顿山谷里流传着龙的歌谣。塔拉王国的大王子莫德雷篡位后，流放了小王子尤安。为了复仇与自救，尤安闯入王国之外的古堡，投奔神秘的大祭司黛尔德拉。他向她许下誓言，甘愿献上任何代价，只为获得改变命运的力量。与此同时，奥德修斯一个与尤安的哥哥长得一模一样的青年出现在时空交错的幻境中。他是龙语者的后商，心怀让大陆和平的理想。两个种族截然不同的青年在雪顿山谷的星光下成为挚友，彼此试探，又彼此搀扶。尤安在复仇的执念和沉重的羁绊里一次次回到过去，试图改写命运的安排。可在这片被遗忘的土地上，纠缠的灵魂互相影响，生命的年轮深深扎根，命运的齿轮不肯停歇。当古老的歌谣再度响起，篝火下，吟游诗人低吟浅唱。谁能真正挣脱那条注定要走完的道路?" }, // 新增 shiftX
+    { name: "连璧", floor: "7F丨星空间407号·她剧场", top: 70, side: "left", lineWidth: 105, company: "河鳄文化", image: "海报/连璧.png", desc: "在桉城一手遮天的李氏家族中，人人纸醉金迷，争权夺利。集团千金李玉屏与第一秘书谢宛宁，针锋相对，水火不容。曾是挚友的她们，为何会反目成仇?勾心斗角的名利场上，她们能否得偿所愿?深不见底的命运漩涡中，她们又是否能够看清自己的内心?揭开尘封的往事，走进金丝的牢笼，秘密与羁绊的舞台，拉开帷幕......" }, 
+    { name: "梦微之", floor: "7F丨星空间33号·鲸剧场", top: 74, side: "right", lineWidth: 105, shiftX: 60, company: "魅鲸文化", image: "海报/梦微之.png", desc: "中唐时期，藩镇割据，官宦专权跋扈。饱受非议的'才子'元稹登上宰相之位未满三月，被指控植党营私，刺杀政敌。如临深渊之际，元稹却在夜禁后独自前往荒置的旧宅赴约，在那里等待的是他曾经的至交好友一一白居易。从诗酒风流的少年才俊，到眼下势倾朝野的达官显贵；从形影相随的金石交契，到如今视同陌路的平生故人。浮世如梦，三十年风雨同舟，大唐双璧波澜壮阔的一生，又将迎来怎样的结局?" }, // 新增 shiftX
+    { name: "嗜血博士", floor: "7F丨星空间1023号·涵金小剧场", top: 82, side: "left", lineWidth: 135, company: "涵金文化", image: "海报/嗜血博士.png", desc: "二十世纪三十年代，在远离纽约外海孤岛上有一座老旧监狱，关押着最残忍骇人的疯子和变态杀人狂，这里戒备森严终日不见天日，就如同地狱。乔纳森是一名著名的心理学博士，他只身前往这里研究一个特殊案例：第13号病人。传说中13号病人爱德华原本是一名法医验尸官，可他被发现跟一桩连环凶杀案有关，所有的证据都指向他，但爱德华并不认罪，坚称是吸血鬼吸干了那些女孩的鲜血......随着对爱德华的调查逐渐深入，乔纳森竞发现爱德华所讲述的关于吸血鬼的故事可能是真实的，究竟什么是真实，什么是虚幻?伴随着催眠钟声，迷雾逐渐被撕开。真相，躲在幽暗的角落里......" }
+];
+// B. 亚洲大厦数据 
+const asiaData = [
+    { name: "谨遵医嘱", floor: "11F丨星空间605号", top: 30, side: "left", lineWidth: 60, company: "星空间605号", image: "海报/谨遵医嘱.png", desc: "中年马拉松公益跑者马勒意外查出患上阿尔兹海默症，生活急转而下，工作失利，家庭瓦解，他剩余的一半人生开始与倒退的记忆赛跑。他再度走访那些与自己生活相关的人，开启了一场独属自己的'去伪存真'。摆在他面前的，是人生的发令枪，拿起或放下，答案无人知晓..." },
+    { name: "OZ", floor: "11F丨星空间20号·MOriginal Box", top: 33, side: "right", lineWidth: 60, shiftX: 80, company: "魅鲸文化", image: "海报/OZ.png", desc: "大多数工作岗位被人工智能替代的2045年，生产VR设备的全自动化工厂中，唯一的人类，俊一。在俊一枯燥的日常生活中，虚拟现实游戏《OZ》是他唯一的亮色。在《OZ》的世界里，AI铁皮原本在原地执着等待着曾经的主人，却幸运地获得了故事模式的入场券：黄金蝴蝶。为了能见到魔法师，实现各自的心愿，俊一和铁皮一起组队，在《OZ》的游戏世界中开启了冒险。途中遇到了拥有华丽装备和最高能力的玩家MAX和他的AI伙伴BUTTON。究竟谁能够突破重重难关，最先抵达终点呢?俊一和铁皮的愿望真的能实现吗?" }, // shiftX 调整为 -100
+    { name: "亡灵之旅：冥犬与少年", floor: "7F丨星空间55号·五十五剧场", top: 48, side: "left", lineWidth: 80, company: "五十五文化", image: "海报/亡灵之旅：冥犬与少年.png", desc: "古埃及少年维塔意外捡到了一本《亡灵书》。书上说，死亡不是生命的终点，而是一场全新冒险的起点亡灵只要通过危机四伏的各种关卡与挡路神们的重重考验，最终在'称量法庭'上交出比羽毛更轻的心脏，就能到达'芦苇之地'，获得永生。旅程虽艰险，但书中记载，最伟大的神'荷鲁斯'会守护亡灵通关。为了在芦苇之地见到逝去的好友，维塔一心求死，醒来时，竟见到了一位狗头人身的神。狗头神自称'荷鲁斯'，并对《亡灵书》了如指掌。于是，'冥犬'与少年踏上了奇幻的'亡灵之旅'......千年的阴谋，生死的纠葛，神界的混沌，来日的祈盼......梦中都在奔向的芦苇之地，少年能到达吗?" }, 
+    { name: "寅时说", floor: "7F丨星空间5号·山眠剧场", top: 48, side: "right", lineWidth: 70, shiftX: 60, company: "山眠剧场", image: "海报/寅时说.png", desc: "这是一场穿越古今的欲望对话。古篇，刘邦于寅时交界回望：十面埋伏，鸿门宴，楚河汉界...权力路上的每一次挣扎与抉择，在倒置的宫阙间重演。他是选择了命运，还是被命运选择?今篇，现代人在高楼与霓虹中奔走。困于轮胎之上的奔忙，铁轨之外的眺望，闪光之中的迷失，与刘邦追逐江山何异?同样的欲望，同样的迷惘，人类从未停止前行。古今映照，你我皆在局中。当那東刺眼的太阳升起，我们都在指縫间寻找自己的路。这是一出舞剧，更是一面映照人心的镜子。" }, // shiftX 调整为 -100
+    { name: "#0528", floor: "5F丨星空间28号 好好有戏剧场", top: 58, side: "left", lineWidth: 50, company: "好好有戏", image: "海报/%230528.png", desc: "在繁华热闹的百老汇附近，有一间便宣到出奇的出租屋——0528号房间。这里曾经发生过一次火灾，传说自此之后，就时常发生许多可怕的事情.....而今天，一个满怀音乐剧梦想的男孩来到了逐梦之地，囊中羞涩的他只能租得起#0528，自此，诡异的事情接踵而至，一场意想不到的奇幻之旅也拉开了帷幕。" }, 
+    { name: "阿波罗尼亚", floor: "4F丨星空间1号·一台好戏小剧场", top: 68, side: "left", lineWidth: 70, company: "一台好戏", image: "海报/阿波罗尼亚.png", desc: "1930年，大恐慌时代的纽约。通过非法酿酒而占领了整个城市的黑手党势力逐渐壮大。穷苦劳动者们最爱的阿波罗尼亚酒吧也落入了他们之手，明天就要被迫关门停业。酒吧中的歌舞演员 Richard 与 Oscar 正要准备最后一场告别演出。这时黑手党成员 Stevie却突然闯入，胁迫二人今晚就要表演黑手党教父的自传剧目《Mia Famiglia》。由于演员不足，黑手党成员 Stevie 也加入了表演之中，三个性格迥异，各怀心思的男人开始了令人啼笑皆非的演出......" }, 
+    { name: "辛吉路的画材店", floor: "4F丨星空间1号·一台好戏小剧场", top: 68, side: "right", lineWidth: 90, company: "好好有戏", image: "海报/辛吉路的画材店.png", desc: "年少成名的漫画家卡路事业一帆风顺，但是却在日复一日的工作中，失去了对漫画的兴趣和冲动。就在他迷茫无助之时，一封遗嘱改变了这一切。卡路童年在福利院的朋友辛吉因病去世，把唯一的财产，一家画材店留给了卡路。卡路来到画材店，意外发现了他和辛吉在小时候一起创作的少年热血漫画《塞修战纪》，更令人意想不到的是主人公'塞修'竟然从漫画中穿越出来，他强迫卡路帮助自己完成辛吉没画完的结局。就这样，卡路不得不开始作画，但是他渐渐发现塞修背后却还有着'不可告人的目的'......过去与现在，梦幻与现实，光明与黑暗在这家小小的画材店交汇，一场关于少年背叛与救赎的故事就此展开" }, 
+    { name: "去你的夏天", floor: "2F丨一台好戏方寸剧场", top: 78, side: "left", lineWidth: 140, company: "一台好戏", image: "海报/去你的夏天.png", desc: "活在'被优化'恐惧里的资深社畜游亦，莫名在求神祈福时'穿越'了!被困在神秘的'放逐之地'，身边还跟着两个举止诡异身份成谜的怪人，游亦被迫卷入了一个惊喜与惊吓齐飞，痛苦与治愈交织的'寻宝任务'。一艘船，一扇门，一个名字和一朵花......与自我和解，也彼此救赎，永不结束的夏天的故事就此开启。", spreadClass: "spread-1" }, 
+    { name: "怪物", floor: "2F丨星空间18号·谜剧场", top: 84, side: "left", lineWidth: 90, company: "延幕文化", image: "海报/怪物.png", desc: "隐秘，一段尘封的过往；忘却，遁入潜藏的真相；困惑，走不出阴暗的牢笼；重启，猜不透命定的底牌。我们曾在暗夜携手前行，寻找光明的出口，可天光太刺眼，不敢伸手触碰，撕开溶于体肤的假面，互相直视的刹那——你，究竟是谁?我们，还剩下什么?", spreadClass: "spread-2" }, 
+    { name: "桑塔露琪亚", floor: "2F丨星空间9号 鲸剧场（亚洲大厦2楼）", top: 86, side: "left", lineWidth: 150, company: "一台好戏", image: "海报/桑塔露琪亚.png", desc: "深夜，桑塔露琪亚赌场里，黑手党打手Stevie正在代笔撰写现任黑手党老大Sonny Boy的自传《我的家族》，以帮助他竞选上院议员。正当 Stevie被创作的痛苦和灵感所纠缠时，上任黑手党老大的另一个儿子 Chi Chi像幽灵一般出现......众人眼里已意外去世的Chi Chi突然出现，翻看着Stevie书稿中关于自己家族的故事。两人以与Sonny Boy的故事为线索，穿梭于过去与现在之间。错过的爱情，兄弟情，还有过去不曾知晓的真相逐渐清晰......", spreadClass: "spread-3" }, 
+    { name: "阿尔托，梵高", floor: "2F丨星空间17号 NFP剧场", top: 80, side: "right", lineWidth: 80, company: "熠璟文化", image: "海报/阿尔托·梵高.png", desc: "被脑髓炎后遗症折磨着的安托南·阿尔托，在经历野心勃勃创作的演出失败后，出现了精神异常的症状。在接受精神方面治疗的过程中，不断在痛苦中挣扎的他，见到了文森特·梵·高。阿尔托为了证明自己，开始从无意识的世界里寻找文森特·梵·高!" }, 
+    { name: "灯塔", floor: "2F丨星空间9号 鲸剧场（亚洲大厦2楼）", top: 85, side: "right", lineWidth: 120, company: "魅鲸文化", image: "海报/灯塔.png", desc: "在19世纪40年代的英国，讲述了在英格兰一个偏远的海岸上，一位年迈的灯塔守塔人，年轻的修船工霍普和家道中落的船员怀恩三人的故事。守塔人想要修复一艘废弃的海船，以实现他出海的梦想。在这个过程中，他们三人因为共同的目标而相遇，共同经历了许多事情，包括日常的拌嘴，争执，猜忌和误解，最终在彼此的交往中建立了深厚的关系。" },
+    { name: "flames火焰", floor: "1F丨星空间4号", top: 90, side: "right", lineWidth: 110, company: "缪时客", image: "海报/火焰.png", desc: "故事以爱德蒙在大火中身亡为起点，其未婚妻梅瑞迪斯与挚友埃里克在暴雨夜的陵园里。剧情通过多重反转揭示爱德蒙的罪行与死亡真相，最终以震撼结局解开全部谜团。全剧延续悬疑惊悚风格，包含大量情节迂回与戏剧性转折。" }
+];
+// C. 大世界数据 
+const worldData = [
+    { name: "死神疗愈馆", floor: "4F丨星空间0507号·心灵剧场", top: 22, side: "left", lineWidth: 70, company: "一岁文化", image: "海报/死神疗愈馆.png", desc: "沈飞扬的心灵疗愈馆无人问津。一天，一位自称死神的不速之客突然造访，沈飞扬根本不相信，反而盛情邀请这位'死神先生'体验他新发明的梦境疗愈..." }, 
+    { name: "LIZZIE丽兹", floor: "4F丨星空间11号·MOriginal Box", top: 22, side: "right", lineWidth: 100, shiftX: -105, company: "莫瑞吉", image: "海报/丽兹.png", desc: "1892年8月4日，一个闷热夏日的午后，美国马塞诸塞州的福尔里弗，吝啬的银行家Andrew Jackson Borden和他的第二任妻子Abby惨死于家中..." }, 
+    { name: "流星之绊", floor: "4F丨星空间10号·MOriginal Box", top: 28, side: "left", lineWidth: 100, company: "莫瑞吉", image: "海报/流星之绊.png", desc: "岳州府平江县，十年前流星夜的一桩血案，使得李氏三兄妹成了孤儿。迫于生活的无奈，他们靠欺诈为生..." }, 
+    { name: "渡河，渡河", floor: "4F丨星空间1997号·河岸剧场", top: 30, side: "right", lineWidth: 100, shiftX: -95, company: "适意为之studio", image: "海报/渡河，渡河.png", desc: "渡河，渡河，十年的悬案，四个人的救赎。千禧年初，东北大雪下的除夕夜，河畔芦苇丛中发生一起凶杀案..." }, 
+    { name: "翻国王棋", floor: "4F丨星空间77号·鲸剧场", top: 34, side: "left", lineWidth: 60, company: "魅鲸文化", image: "海报/翻国王棋.png", desc: "19世纪初期，瑞典-挪威联合王国派出特别行动队，前往被幽灵王盘踞多年的贝尔岛执行接收任务..." }, 
+    // === 3F ===
+    { name: "珍珑", floor: "3F丨珍珑剧场", top: 65, side: "right", lineWidth: 145, shiftX: 200, company: "小鹿追马", image: "海报/珍珑.png", desc: "1950年美国鹿港市唐人街，在'潮汕商会'的旧址上，传闻中用来参拜'以血还血'的守护神'金龙'的密室因一场地震而重见天日..." }, // 增大 shiftX
+    { name: "轮盘", floor: "3F丨轮盘剧场", top: 69, side: "left", lineWidth: 90, shiftX: 180,company: " ",image: "海报/轮盘.png", desc: "欢迎来到1920年代的美国大萧条时期，百万富翁Poe的庄园向你敞开。《轮盘》是一部全新的沉浸式音乐剧..." }, // 新增 shiftX
+    // === 2F ===
+    { name: "时光代理人", floor: "2F丨时光剧场", top: 82, side: "left", lineWidth: 80, shiftX: 180, company: "接着奏乐接着舞", image: "海报/时光代理人.png", desc: "在都市的某个角落里，有一家叫做'时光照相馆'的小店，由程小时与陆光两位年轻小伙共同经营..." },
+    { name: "星图", floor: "2F丨星图剧场", top: 82, side: "right", lineWidth: 50, shiftX: 200, company: "剧伙音乐", image: "海报/星图.png", desc: "命运间的牵绊纠缠，不过宇宙一瞬的呼吸。1998年，世纪之交前，在世界中心十字路口的百老汇..." } // 新增 shiftX
+];
+// === 视觉页配置 === 
+const visualConfig = {
+    'no1': { data: no1Data, img: 'building_no1.png', floors: [ { txt: '10F', top: '35%' }, { txt: '7F', top: '65%' } ] }, 
+    'asia': { data: asiaData, img: 'building_asia.png', floors: [ { txt: '11F', top: '15%' }, { txt: '7F', top: '35%' }, { txt: '5F', top: '48%' }, { txt: '4F', top: '58%' }, { txt: '1F', top: '85%' } ] }, 
+    'world': { data: worldData, img: 'building_dashijie.png', floors: [ { txt: '4F', top: '25%' }, { txt: '3F', top: '50%' }, { txt: '2F', top: '70%' } ] } 
+};
+// === 控制逻辑 === 
+const mapView = document.getElementById('map-view'); 
+const visualView = document.getElementById('visual-view'); 
+const modal = document.getElementById('modal-overlay'); 
+
+// 1. 进入 视觉页 
+function goVisualView(id) { 
+    const config = visualConfig[id]; 
+    if (!config) return; 
+
+    visualView.dataset.building = id; // A. 设置图片 
+    const imgEl = document.getElementById('current-building-img'); 
+    imgEl.src = config.img; 
+
+    // B. 设置楼层背景字 
+    const floorContainer = document.getElementById('floor-marks-container'); 
+    floorContainer.innerHTML = ''; 
+    config.floors.forEach(f => { 
+        const div = document.createElement('div'); 
+        div.className = 'bg-floor-mark'; 
+        div.innerText = f.txt; 
+        div.style.top = f.top; 
+        floorContainer.appendChild(div); 
+    }); 
+
+    // C. 渲染剧目引线 (已修改：将 company-name-label 放入 show-name 中，以便居中)
+    const container = document.getElementById('vis-layer'); 
+    container.innerHTML = ''; 
+    container.dataset.building = id; 
+
+    config.data.forEach(item => { 
+        const el = document.createElement('div'); 
+        el.className = `show-item ${item.side}`; 
+        el.style.top = `${item.top}%`; 
+        el.dataset.company = item.company; 
+        el.dataset.floor = item.floor; 
+
+        if (item.spreadClass) { 
+            el.classList.add(item.spreadClass); 
+        } 
+
+        // 修改：将 company-name-label 放入 show-name 中，实现正下方居中定位
+        el.innerHTML = `
+            <div class="show-name">
+                ${item.name}
+                <div class="company-name-label">${item.company}</div> 
+            </div>
+            <div class="line"></div>
+            <div class="expanded-shows"></div>
+        `; 
+
+        if (item.lineWidth) { 
+            el.style.setProperty('--line-length', `${item.lineWidth}px`); 
+        } 
+        if (typeof item.shiftX === 'number') { 
+            el.style.setProperty('--extra-shift', `${item.shiftX}px`); 
+        } 
+
+        // 绑定交互 
+        el.addEventListener('mouseenter', () => handleHover(el, item.company)); 
+        el.addEventListener('mouseleave', handleLeave); 
+        el.addEventListener('click', () => openModal(item)); 
+        container.appendChild(el); 
+    }); 
+
+    switchView(visualView); 
+} 
+
+// 2. 视图切换辅助函数 
+function switchView(targetView) { 
+    mapView.style.opacity = '0'; 
+    mapView.style.pointerEvents = 'none'; 
+    targetView.classList.add('active'); 
+} 
+
+function backToMap() { 
+    visualView.classList.remove('active'); 
+    mapView.style.opacity = '1'; 
+    mapView.style.pointerEvents = 'auto'; 
+} 
+
+// 3. 视觉页 Hover 逻辑 (已修改：实现展开剧目功能)
+function handleHover(target, company) {
+    document.getElementById('vis-layer').classList.add('has-hover');
+    target.classList.add('active');
+
+    const expandedShowsEl = target.querySelector('.expanded-shows');
+    const allShows = COMPANY_SHOW_MAP[company];
+    // 获取当前剧目名称 (通过 show-name 元素获取其文本内容，忽略公司名子元素)
+    const showNameElement = target.querySelector('.show-name');
+    const currentShowInBox = showNameElement.firstChild.textContent.trim();
+    
+    // 只有当公司存在于映射表中且剧目数量大于1时才尝试展开
+    if (allShows && allShows.length > 1) {
+        // 筛选出非当前剧目的其他剧目
+        const otherShowsFromUserList = allShows.filter(name => {
+            // 处理剧目名称的别名或不完全匹配的情况
+            if (currentShowInBox === "LIZZIE丽兹" && name === "丽兹") return false;
+            if (currentShowInBox === "渡河" && name === "渡河，渡河") return false;
+            if (currentShowInBox === "“savior”" && name === "“savior”") return false;
+            
+            return name !== currentShowInBox;
+        });
+
+        if (otherShowsFromUserList.length > 0) {
+            expandedShowsEl.innerHTML = otherShowsFromUserList.map(name => 
+                `<div class="show-box">${name}</div>`
+            ).join('');
+        } else {
+            expandedShowsEl.innerHTML = ''; // 剩余剧目只有1部或0部，不展开
+        }
+    } else {
+        expandedShowsEl.innerHTML = ''; // 单一剧目公司，不展开
+    }
+    
+    // 高亮同一出品方的剧目 (保留原有逻辑)
+    document.querySelectorAll('#vis-layer .show-item').forEach(el => {
+        if (el !== target && el.dataset.company === company) {
+            el.classList.add('related');
+        }
+    });
+} 
+
+function handleLeave() { 
+    document.getElementById('vis-layer').classList.remove('has-hover'); 
+    document.querySelectorAll('.show-item').forEach(el => { 
+        el.classList.remove('active'); 
+        el.classList.remove('related'); 
+        // 在mouseleave时清空expanded-shows的内容，确保下次hover时重新渲染最新的
+        const expandedShowsEl = el.querySelector('.expanded-shows');
+        if(expandedShowsEl) {
+            expandedShowsEl.innerHTML = '';
+        }
+    }); 
+} 
+
+// 4. 弹窗逻辑 
+function openModal(item) { 
+    // 设置文本 
+    document.getElementById('m-title').innerText = item.name || item.n; 
+    document.getElementById('m-company').innerText = `位置：${item.floor || item.fl || ''} | ${item.company || '未知'}`; 
+    document.getElementById('m-desc').innerText = item.desc || '暂无简介'; 
+    // 设置图片 
+    const imgEl = document.getElementById('m-img'); 
+    if (item.image) { 
+        imgEl.src = item.image; 
+        imgEl.style.display = 'block'; 
+    } else { 
+        imgEl.style.display = 'none'; 
+    } 
+    modal.classList.add('show'); 
+} 
+
+function closeModal(e) { 
+    if (e.target === modal || e.target.classList.contains('modal-close')) { 
+        modal.classList.remove('show'); 
+    } 
+} 
+</script>
+<audio id="bellring-audio" src="bellring.mp3" preload="auto"></audio>
+<script>
+let bellringStarted = false;
+const startBellringLoop = () => {
+    if (bellringStarted) return;
+    const audio = document.getElementById('bellring-audio');
+    if (!audio) return;
+    audio.loop = true;
+    audio.play().then(() => {
+        bellringStarted = true;
+    }).catch(() => {
+        // Autoplay might be blocked; allow retry on user gesture.
+    });
+};
+window.addEventListener('load', startBellringLoop, { once: true });
+window.addEventListener('pointerdown', startBellringLoop, { once: true });
+</script></body> </html>
